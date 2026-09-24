@@ -114,7 +114,7 @@
             renews = prevMonthDay(day, today || todayISO());
         }
         if (cycle === 'weekly') day = parse(renews).d;
-        return {
+        var out = {
             id: typeof r.id === 'string' && r.id ? r.id.slice(0, 64) : uuid(),
             name: String(r.name || '').trim().slice(0, 80),
             domain: cleanDomain(r.domain),
@@ -127,6 +127,74 @@
             status: STATUSES.indexOf(r.status) !== -1 ? r.status : 'active',
             notes: String(r.notes || '').slice(0, 500)
         };
+        var hist = cleanHistory(r.priceHistory);
+        /* Only present when there is history, so records without it keep the
+           exact v1/v2 shape the external script reads. */
+        if (hist.length) out.priceHistory = hist;
+        return out;
+    }
+
+    /* ── Price history ── */
+    /* Each entry is a price that was in effect until `date` (the day it changed). */
+    var HISTORY_MAX = 50;
+    function cleanHistory(v) {
+        if (!Array.isArray(v)) return [];
+        return v.filter(function (h) { return h && isISO(h.date) && isFinite(Number(h.price)) && Number(h.price) >= 0; })
+            .map(function (h) {
+                return { date: h.date, price: Math.round(Number(h.price) * 100) / 100, currency: CURRENCIES.indexOf(h.currency) !== -1 ? h.currency : 'BRL' };
+            })
+            .slice(-HISTORY_MAX);
+    }
+    function withPriceHistory(prev, next, today) {
+        var hist = cleanHistory(prev && prev.priceHistory);
+        if (prev && (prev.price !== next.price || prev.currency !== next.currency)) {
+            hist.push({ date: today || todayISO(), price: prev.price, currency: prev.currency });
+        }
+        var out = {};
+        Object.keys(next).forEach(function (k) { if (k !== 'priceHistory') out[k] = next[k]; });
+        if (hist.length) out.priceHistory = hist.slice(-HISTORY_MAX);
+        return out;
+    }
+
+    /* ── Encrypted backup ── */
+    /* The data only lives in this browser. An encrypted export can be kept
+       anywhere (cloud drive, e-mail) without exposing it: PBKDF2-SHA256
+       (600k iterations, OWASP 2023) derives an AES-256-GCM key from the
+       passphrase; GCM also detects a wrong passphrase or a tampered file. */
+    var BACKUP_FORMAT = 'subs-backup';
+    var KDF_ITERATIONS = 600000;
+    function b64(bytes) { var s = ''; for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]); return btoa(s); }
+    function unb64(str) { var s = atob(str), out = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) out[i] = s.charCodeAt(i); return out; }
+    function deriveKey(passphrase, salt, iterations) {
+        var subtle = root.crypto.subtle;
+        return subtle.importKey('raw', new TextEncoder().encode(passphrase), 'PBKDF2', false, ['deriveKey']).then(function (base) {
+            return subtle.deriveKey({ name: 'PBKDF2', hash: 'SHA-256', salt: salt, iterations: iterations }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+        });
+    }
+    function isEncryptedBackup(text) {
+        try { var d = JSON.parse(text); return !!d && d.format === BACKUP_FORMAT; } catch (e) { return false; }
+    }
+    function encryptBackup(plaintext, passphrase, iterations) {
+        var it = iterations || KDF_ITERATIONS;
+        var salt = root.crypto.getRandomValues(new Uint8Array(16));
+        var iv = root.crypto.getRandomValues(new Uint8Array(12));
+        return deriveKey(passphrase, salt, it).then(function (key) {
+            return root.crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, new TextEncoder().encode(plaintext));
+        }).then(function (ct) {
+            return JSON.stringify({ format: BACKUP_FORMAT, v: 1, kdf: { name: 'PBKDF2', hash: 'SHA-256', iterations: it }, cipher: 'AES-GCM', salt: b64(salt), iv: b64(iv), ct: b64(new Uint8Array(ct)) }) + '\n';
+        });
+    }
+    /* Rejects with Error('bad-pass') for a wrong passphrase or a damaged file,
+       Error('bad-file') when the envelope itself is unreadable. */
+    function decryptBackup(text, passphrase) {
+        var d;
+        try { d = JSON.parse(text); } catch (e) { return Promise.reject(new Error('bad-file')); }
+        if (!d || d.format !== BACKUP_FORMAT || d.v !== 1 || !d.kdf || !(d.kdf.iterations >= 100000)) return Promise.reject(new Error('bad-file'));
+        var salt, iv, ct;
+        try { salt = unb64(d.salt); iv = unb64(d.iv); ct = unb64(d.ct); } catch (e) { return Promise.reject(new Error('bad-file')); }
+        return deriveKey(passphrase, salt, d.kdf.iterations)
+            .then(function (key) { return root.crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv }, key, ct); })
+            .then(function (pt) { return new TextDecoder().decode(pt); }, function () { throw new Error('bad-pass'); });
     }
 
     /* Returns {items, errors}; entries without a name are rejected. */
@@ -213,6 +281,7 @@
         iso: iso, parse: parse, isISO: isISO, daysIn: daysIn, todayISO: todayISO, addDays: addDays, addMonths: addMonths,
         nextMonthDay: nextMonthDay, prevMonthDay: prevMonthDay, occurrences: occurrences, nextOccurrence: nextOccurrence,
         normalize: normalize, parseImport: parseImport, cleanDomain: cleanDomain, cleanTags: cleanTags, tagList: tagList,
-        monthlyValue: monthlyValue, toBRL: toBRL, toICS: toICS, fold: fold, icsEscape: icsEscape, rrule: rrule
+        monthlyValue: monthlyValue, toBRL: toBRL, toICS: toICS, fold: fold, icsEscape: icsEscape, rrule: rrule,
+        withPriceHistory: withPriceHistory, isEncryptedBackup: isEncryptedBackup, encryptBackup: encryptBackup, decryptBackup: decryptBackup
     };
 })(typeof window !== 'undefined' ? window : globalThis);

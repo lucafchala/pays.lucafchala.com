@@ -74,6 +74,7 @@
                 <div class="field"><label for="sub-status" data-i18n="f_status">Situação</label><select id="sub-status"><option value="active" data-i18n="s_active">ativa</option><option value="paused" data-i18n="s_paused">pausada</option><option value="cancelled" data-i18n="s_cancelled">cancelada</option></select></div>
                 <div class="field grow"><label for="sub-tags" data-i18n="f_tags">Tags (separadas por vírgula)</label><input type="text" id="sub-tags" autocomplete="off" placeholder="streaming, trabalho"></div>
                 <div class="field full"><label for="sub-notes" data-i18n="f_notes">Notas</label><input type="text" id="sub-notes" maxlength="500" autocomplete="off"></div>
+                <p class="price-history full" id="price-history" hidden></p>
                 <p class="field-error full" id="form-error" role="alert" hidden></p>
                 <div class="form-actions full">
                     <button type="button" class="act-btn" id="btn-cancel-edit" data-action="cancel-edit" data-i18n="cancel" hidden>cancelar</button>
@@ -97,6 +98,7 @@
 
         <section class="actions-bar" aria-label="Dados">
             <button class="act-btn" type="button" data-action="export-json" data-i18n="export_json">exportar JSON</button>
+            <button class="act-btn" type="button" data-action="export-enc" data-i18n="export_enc">exportar backup criptografado</button>
             <button class="act-btn" type="button" data-action="import-json" data-i18n="import_json">importar JSON</button>
             <button class="act-btn" type="button" data-action="export-ics" data-i18n="export_ics">exportar calendário (.ics)</button>
             <input type="file" id="import-file" accept="application/json,.json" hidden>
