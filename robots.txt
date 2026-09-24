@@ -1,0 +1,5 @@
+# robots.txt — pays.lucafchala.com
+# A personal tool whose data lives only in the visitor's browser; nothing to index.
+
+User-agent: *
+Disallow: /

@@ -1,0 +1,50 @@
+name: checks
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate JSON files
+        run: |
+          set -e
+          find . -name '*.json' -not -path './.git/*' | while read -r f; do
+            python3 -m json.tool "$f" > /dev/null || { echo "Invalid JSON: $f"; exit 1; }
+          done
+
+      - name: Security headers file present
+        run: test -f _headers
+
+      - name: JS syntax
+        run: for f in *.js; do node --check "$f" || exit 1; done
+
+      - name: No inline scripts, handlers or style attributes (CSP is script-src/style-src 'self')
+        run: |
+          python3 - <<'PY'
+          import re, glob, sys
+          bad = []
+          for p in glob.glob('*.html'):
+              html = open(p, encoding='utf-8').read()
+              for m in re.finditer(r'<script\b([^>]*)>(.*?)</script>', html, re.S):
+                  if 'src=' not in m.group(1) and m.group(2).strip(): bad.append(f'{p}: inline <script>')
+              bad += [f'{p}: inline handler {h}' for h in re.findall(r'\s(on[a-z]+)=', html)]
+              bad += [f'{p}: style attribute' for _ in re.findall(r'\sstyle=', html)]
+          for p in glob.glob('*.js'):
+              js = open(p, encoding='utf-8').read()
+              bad += [f'{p}: inline handler or style attribute in generated markup' for _ in re.findall(r"""['"<][^'"]*\s(?:on[a-z]+|style)=""", js)]
+          if bad: print('\n'.join(bad)); sys.exit(1)
+          print('No inline scripts, handlers or style attributes.')
+          PY
+
+      - name: Unit tests (dates, migration, import, .ics)
+        run: node --test tests/*.test.mjs
+
+      - name: Status-monitor marker present
+        run: grep -q '<h1 class="name">subs</h1>' index.html || { echo "status.lucafchala.com looks for 'subs' on this page"; exit 1; }
