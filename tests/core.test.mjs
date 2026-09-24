@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
-const ctx = { TextEncoder, URL, crypto: globalThis.crypto };
+const ctx = { TextEncoder, TextDecoder, URL, crypto: globalThis.crypto, btoa, atob };
 ctx.globalThis = ctx;
 vm.runInNewContext(fs.readFileSync(new URL('../core.js', import.meta.url), 'utf8'), ctx);
 const C = ctx.SubsCore;
@@ -89,4 +89,34 @@ test('ISO validation rejects impossible dates', () => {
   assert.equal(C.isISO('2026-09-31'), false);
   assert.equal(C.isISO('2028-02-29'), true);
   assert.equal(C.isISO('2026-2-1'), false);
+});
+
+test('price history: an edit that changes the price records the old one', () => {
+  const prev = C.normalize({ id: 'n', name: 'Netflix', price: 39.9, renews: '2026-10-05' });
+  const next = C.normalize({ id: 'n', name: 'Netflix', price: 44.9, renews: '2026-10-05' });
+  const rec = C.withPriceHistory(prev, next, '2026-09-24');
+  assert.deepEqual(plain(rec.priceHistory), [{ date: '2026-09-24', price: 39.9, currency: 'BRL' }]);
+  // an edit that keeps the price keeps the history as is
+  const again = C.withPriceHistory(rec, C.normalize({ ...plain(rec), notes: 'x' }), '2026-09-25');
+  assert.equal(again.priceHistory.length, 1);
+  // survives a save/load round trip through normalize
+  assert.deepEqual(plain(C.normalize(plain(again)).priceHistory), plain(rec.priceHistory));
+});
+
+test('price history: records without it keep the exact old shape', () => {
+  const s = C.normalize({ id: 'a', name: 'x', price: 1, renews: '2026-10-01', priceHistory: [{ date: 'nope', price: 'x' }] });
+  assert.equal('priceHistory' in s, false);
+});
+
+test('encrypted backup: round trip, wrong passphrase, envelope detection', async () => {
+  const data = JSON.stringify([{ id: 'a', name: 'Netflix', price: 39.9 }]);
+  const blob = await C.encryptBackup(data, 'correct horse battery', 100000);
+  assert.equal(C.isEncryptedBackup(blob), true);
+  assert.equal(C.isEncryptedBackup(data), false);
+  assert.doesNotMatch(blob, /Netflix/);
+  assert.equal(await C.decryptBackup(blob, 'correct horse battery'), data);
+  await assert.rejects(C.decryptBackup(blob, 'wrong'), /bad-pass/);
+  const tampered = JSON.parse(blob); tampered.ct = tampered.ct.slice(0, -4) + 'AAAA';
+  await assert.rejects(C.decryptBackup(JSON.stringify(tampered), 'correct horse battery'), /bad-pass/);
+  await assert.rejects(C.decryptBackup('{"format":"subs-backup","v":1,"kdf":{"iterations":10}}', 'x'), /bad-file/);
 });

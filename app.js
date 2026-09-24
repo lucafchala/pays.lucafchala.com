@@ -19,6 +19,11 @@
             c_monthly: 'mensal', c_yearly: 'anual', c_weekly: 'semanal', s_active: 'ativa', s_paused: 'pausada', s_cancelled: 'cancelada',
             add: 'adicionar', save: 'salvar', cancel: 'cancelar', edit: 'editar', del: 'remover', pause: 'pausar', resume: 'reativar', undo: 'desfazer',
             filter_label: 'Filtrar', filter_ph: 'filtrar por nome, tag, nota…', sort_label: 'Ordenar', sort_next: 'próxima cobrança', sort_cost: 'custo mensal', sort_name: 'nome',
+            export_enc: 'exportar backup criptografado', enc_title: 'Backup criptografado',
+            enc_intro: 'O arquivo fica protegido por uma senha e pode ser guardado em qualquer lugar (nuvem, e-mail). Sem a senha ninguém abre — nem você: não há recuperação.',
+            f_pass: 'Senha', f_pass2: 'Repita a senha', enc_short: 'Use pelo menos 10 caracteres.', enc_mismatch: 'As senhas não conferem.', enc_go: 'exportar', enc_done: 'Backup criptografado exportado.',
+            dec_intro: 'Este arquivo é um backup criptografado. Digite a senha usada na exportação.', dec_go: 'abrir', dec_bad: 'Senha errada ou arquivo danificado.', dec_file: 'Arquivo de backup ilegível.', working: 'processando…',
+            price_history: 'Preços anteriores', until: 'até',
             export_json: 'exportar JSON', import_json: 'importar JSON', export_ics: 'exportar calendário (.ics)', export_now: 'exportar agora',
             backup_nag: 'Os dados ficam só neste navegador — exporte um backup de vez em quando.',
             err_name: 'Informe o nome.', err_price: 'Informe um valor válido.', err_date: 'Informe a data da próxima cobrança.',
@@ -38,6 +43,11 @@
             c_monthly: 'monthly', c_yearly: 'yearly', c_weekly: 'weekly', s_active: 'active', s_paused: 'paused', s_cancelled: 'cancelled',
             add: 'add', save: 'save', cancel: 'cancel', edit: 'edit', del: 'remove', pause: 'pause', resume: 'resume', undo: 'undo',
             filter_label: 'Filter', filter_ph: 'filter by name, tag, note…', sort_label: 'Sort', sort_next: 'next charge', sort_cost: 'monthly cost', sort_name: 'name',
+            export_enc: 'export encrypted backup', enc_title: 'Encrypted backup',
+            enc_intro: 'The file is protected by a passphrase and can be kept anywhere (cloud drive, e-mail). Without the passphrase nobody can open it — not even you: there is no recovery.',
+            f_pass: 'Passphrase', f_pass2: 'Repeat the passphrase', enc_short: 'Use at least 10 characters.', enc_mismatch: 'The passphrases don\'t match.', enc_go: 'export', enc_done: 'Encrypted backup exported.',
+            dec_intro: 'This file is an encrypted backup. Enter the passphrase used to export it.', dec_go: 'open', dec_bad: 'Wrong passphrase or damaged file.', dec_file: 'Unreadable backup file.', working: 'working…',
+            price_history: 'Previous prices', until: 'until',
             export_json: 'export JSON', import_json: 'import JSON', export_ics: 'export calendar (.ics)', export_now: 'export now',
             backup_nag: 'Data lives only in this browser — export a backup now and then.',
             err_name: 'Enter a name.', err_price: 'Enter a valid price.', err_date: 'Enter the next charge date.',
@@ -303,6 +313,9 @@
         $('form-rule').setAttribute('data-i18n', s ? 'edit_rule' : 'add_rule');
         $('form-rule').textContent = t(s ? 'edit_rule' : 'add_rule');
         $('btn-cancel-edit').hidden = !s;
+        var hist = s && s.priceHistory ? s.priceHistory : [];
+        $('price-history').hidden = !hist.length;
+        $('price-history').textContent = hist.length ? t('price_history') + ': ' + hist.slice().reverse().map(function (h) { return money(h.price, h.currency) + ' ' + t('until') + ' ' + dateLabel(h.date, { day: 'numeric', month: 'short', year: 'numeric' }); }).join(' · ') : '';
         showError('');
     }
     function showError(msg) { $('form-error').textContent = msg; $('form-error').hidden = !msg; }
@@ -319,7 +332,7 @@
             id: id || undefined, name: name, domain: $('sub-domain').value, price: price, currency: $('sub-currency').value, cycle: $('sub-cycle').value,
             renews: renews, day: prev && prev.renews === renews ? prev.day : undefined, status: $('sub-status').value, tags: $('sub-tags').value, notes: $('sub-notes').value
         });
-        if (prev) subs[subs.indexOf(prev)] = rec; else subs.push(rec);
+        if (prev) { rec = C.withPriceHistory(prev, rec, C.todayISO()); subs[subs.indexOf(prev)] = rec; } else subs.push(rec);
         persist();
         fillForm(null);
         render();
@@ -335,7 +348,17 @@
         return new Promise(function (resolve) {
             var done = function (v) { dlg.close(); resolve(v); };
             $('dialog-actions').onclick = function (e) { var b = e.target.closest('[data-i]'); if (b) done(actions[+b.getAttribute('data-i')].value); };
-            dlg.onclose = function () { resolve(null); };
+            /* Enter in a field confirms the primary action, like a form would. */
+            $('dialog-body').onkeydown = function (e) {
+                if (e.key !== 'Enter' || e.target.tagName !== 'INPUT') return;
+                e.preventDefault();
+                var i = actions.map(function (x) { return !!x.primary; }).indexOf(true);
+                if (i !== -1) done(actions[i].value);
+            };
+            /* The `close` event is async: when an action opens another dialog right
+               away, the previous close arrives while the new one is open and would
+               cancel it. Only a close that leaves the dialog shut counts. */
+            dlg.onclose = function () { if (!dlg.open) resolve(null); };
             dlg.showModal();
         });
     }
@@ -362,8 +385,50 @@
         download('assinaturas.ics', C.toICS(subs, { prefix: t('ics_prefix'), calName: t('cal_name'), fmt: money }), 'text/calendar;charset=utf-8');
         stampExport();
     }
+    /* ── Encrypted backup ── */
+    function passFields(confirm, err) {
+        return '<div class="field"><label for="bk-pass">' + esc(t('f_pass')) + '</label><input type="password" id="bk-pass" autocomplete="' + (confirm ? 'new-password' : 'current-password') + '"></div>' +
+            (confirm ? '<div class="field"><label for="bk-pass2">' + esc(t('f_pass2')) + '</label><input type="password" id="bk-pass2" autocomplete="new-password"></div>' : '') +
+            (err ? '<p class="field-error" role="alert">' + esc(err) + '</p>' : '');
+    }
+    function exportEncrypted(err) {
+        var opened = dialog(t('enc_title'), '<p class="hint">' + esc(t('enc_intro')) + '</p>' + passFields(true, err),
+            [{ label: t('cancel'), value: null }, { label: t('enc_go'), value: 'go', primary: true }]);
+        setTimeout(function () { $('bk-pass').focus(); }, 0);
+        opened.then(function (v) {
+            if (v !== 'go') return;
+            var p1 = $('bk-pass').value, p2 = $('bk-pass2').value;
+            if (p1.length < 10) return exportEncrypted(t('enc_short'));
+            if (p1 !== p2) return exportEncrypted(t('enc_mismatch'));
+            toast(t('working'));
+            C.encryptBackup(JSON.stringify(subs), p1).then(function (blob) {
+                download('assinaturas-' + C.todayISO() + '.subs-backup.json', blob, 'application/json');
+                stampExport();
+                toast(t('enc_done'));
+            });
+        });
+    }
+    function askPassAndDecrypt(text, err) {
+        return new Promise(function (resolve) {
+            var opened = dialog(t('enc_title'), '<p class="hint">' + esc(t('dec_intro')) + '</p>' + passFields(false, err),
+                [{ label: t('cancel'), value: null }, { label: t('dec_go'), value: 'go', primary: true }]);
+            setTimeout(function () { $('bk-pass').focus(); }, 0);
+            opened.then(function (v) {
+                if (v !== 'go') return resolve(null);
+                var pass = $('bk-pass').value;
+                C.decryptBackup(text, pass).then(resolve, function (e) {
+                    if (e && e.message === 'bad-file') { dialog(t('import_title'), '<p>' + esc(t('dec_file')) + '</p>', [{ label: t('cancel'), value: null, primary: true }]); return resolve(null); }
+                    askPassAndDecrypt(text, t('dec_bad')).then(resolve);
+                });
+            });
+        });
+    }
+
     function importJSON(file) {
         file.text().then(function (text) {
+            return C.isEncryptedBackup(text) ? askPassAndDecrypt(text) : text;
+        }).then(function (text) {
+            if (text == null) return;
             var res = C.parseImport(text);
             if (!res.items.length) { dialog(t('import_title'), '<p>' + esc(t('import_bad')) + '</p>', [{ label: t('cancel'), value: null, primary: true }]); return; }
             var ids = {};
@@ -399,6 +464,7 @@
             case 'cal-prev': calCursor = C.addMonths(calCursor.y, calCursor.m, -1); renderCalendar(C.todayISO()); break;
             case 'cal-next': calCursor = C.addMonths(calCursor.y, calCursor.m, 1); renderCalendar(C.todayISO()); break;
             case 'export-json': exportJSON(); break;
+            case 'export-enc': exportEncrypted(); break;
             case 'export-ics': exportICS(); break;
             case 'import-json': $('import-file').click(); break;
         }

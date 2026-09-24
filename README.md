@@ -23,7 +23,8 @@ Part of the [lucafchala.com ecosystem](https://github.com/lucafchala/lucafchala.
 - **Import / export:**
   - export JSON;
   - import JSON with validation and a *merge* / *replace all* choice (replacing keeps a local backup of the previous data);
-  - export `.ics`.
+  - export `.ics`;
+  - **encrypted backup:** exported with a passphrase (PBKDF2-SHA256, 600k iterations â†’ AES-256-GCM, in the browser via WebCrypto), so the file can be kept in a cloud drive or e-mail. Importing detects it and asks for the passphrase. There's no recovery without it.
 - **`.ics` calendar** (RFC 5545):
   - one recurring event per active plan, with a stable `UID` and a `DTSTAMP`;
   - the correct first date;
@@ -31,6 +32,7 @@ Part of the [lucafchala.com ecosystem](https://github.com/lucafchala/lucafchala.
   - escaped and folded lines, CRLF;
   - a reminder (`VALARM`) one day before each charge.
 - **Icons:** the site's favicon from DuckDuckGo (requested with `no-referrer`), falling back to a coloured monogram. This replaces Clearbit's logo API, which HubSpot shut down.
+- **Price history:** editing a plan's price records the old one with the date it changed (`priceHistory`). The edit form lists previous prices.
 - **Safety net:**
   - asks the browser for persistent storage;
   - nags for a backup when there's data and no export in 30 days;
@@ -63,6 +65,7 @@ Stored in the browser's `localStorage` under `subsData`, as a **plain array** â€
 | `renews` | A known charge date (`YYYY-MM-DD`); later charges are computed from it |
 | `tags` | Comma-separated string (kept as a string for compatibility with v1 exports) |
 | `status` | `active` \| `paused` \| `cancelled` (added in v2) |
+| `priceHistory` | Optional, only present once a price changed: `[{ date, price, currency }]`, each a price in effect **until** `date` (max 50) |
 
 **Migration:** v1 records (no `renews`, price sometimes a string) are upgraded when loaded. `renews` becomes the most recent charge on `day`, so this month's bill still shows. Other keys: `subsRates` (last good exchange rates), `subsLastExport`, `subsBackup` (data before the last "replace all" import), `theme` / `lang`.
 
@@ -81,6 +84,11 @@ Stored in the browser's `localStorage` under `subsData`, as a **plain array** â€
 | `tests/core.test.mjs` | `node --test` suite |
 
 **CSP:** `script-src 'self'; style-src 'self'; connect-src 'self' https://economia.awesomeapi.com.br; img-src 'self' data: https://icons.duckduckgo.com; font-src 'self'`, plus `Referrer-Policy: no-referrer`. Every value written into the page is HTML-escaped (a crafted import can't inject markup), and there are no inline handlers.
+
+## Decisions
+
+- **No subscribable (`webcal://`) calendar.** A live feed needs a server holding the data, which contradicts "no backend". The `.ics` stays a download: re-export after adding plans.
+- **No sync.** Cross-device transfer is the encrypted backup file, carried by you.
 
 ## Development
 
