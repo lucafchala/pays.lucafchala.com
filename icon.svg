@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <style>
+    .bg { fill: #0d0c0a; } .fg { fill: none; stroke: #c08030; stroke-width: 34; stroke-linecap: round; stroke-linejoin: round; }
+    @media (prefers-color-scheme: light) { .bg { fill: #f4efe6; } .fg { stroke: #8a5712; } }
+  </style>
+  <rect class="bg" width="512" height="512" rx="80"/>
+  <path class="fg" d="M340 176 A110 110 0 1 0 356 316"/>
+  <path class="fg" d="M318 112 L346 176 L282 196"/>
+  <path class="fg" d="M256 196 V316 M226 222 H274 A22 22 0 0 1 274 266 H238 A22 22 0 0 0 238 310 H286"/>
+</svg>

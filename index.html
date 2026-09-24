@@ -3,96 +3,111 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Subs | Luca F. Chala</title>
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400;1,600&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    <title>subs — Luca F. Chala</title>
+    <meta name="description" content="Controle pessoal de assinaturas: custos mensais e anuais em BRL, calendário de renovações e exportação .ics.">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#0d0c0a">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/svg+xml" href="/icon.svg">
+    <link rel="preload" href="/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/style.css">
+    <script data-cfasync="false" src="/theme.js"></script>
+    <script data-cfasync="false" src="/core.js" defer></script>
+    <script data-cfasync="false" src="/app.js" defer></script>
 </head>
 <body>
-    <script>
-        // Restaura o tema antes do first paint para evitar flash
-        if (localStorage.getItem('theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
-    </script>
-    
-    <!-- Grain overlay do ecossistema -->
-    <svg class="grain" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-        <filter id="noiseFilter"><feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/></filter>
-        <rect width="100%" height="100%" filter="url(#noiseFilter)"/>
-    </svg>
+    <a class="skip" href="#main" data-i18n="skip">Pular para o conteúdo</a>
 
     <div class="controls">
-        <div class="controls-inner">
-            <button class="ctrl-btn" id="lang-toggle">EN</button>
-            <button class="ctrl-btn" id="theme-toggle">◐</button>
+        <div class="controls-inner" role="group" data-i18n-attr="aria-label:prefs" aria-label="Preferências">
+            <button class="ctrl-btn" type="button" data-lang-btn="pt" aria-pressed="true">PT</button>
+            <span class="ctrl-sep" aria-hidden="true">|</span>
+            <button class="ctrl-btn" type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+            <span class="ctrl-sep" aria-hidden="true">·</span>
+            <button class="ctrl-btn theme" type="button" id="btn-theme" data-i18n-attr="aria-label:theme" aria-label="Alternar tema">◐</button>
         </div>
     </div>
 
-    <main>
-        <header>
-            <h1 class="name">subs</h1>
-            <p class="bio" style="margin-top: -10px; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 0.9em;">
-                Subscription Matrix · USD/BRL: <span id="exchange-rate">Carregando...</span>
-            </p>
-        </header>
+    <header>
+        <h1 class="name">subs</h1>
+        <p class="micro" data-i18n="tagline">assinaturas · custos recorrentes</p>
+        <p class="rates" id="rates" aria-live="polite"></p>
+    </header>
 
-        <!-- Dashboard Numérico -->
-        <section class="dashboard">
-            <div class="dash-card">
-                <span class="label">Total Mensal (BRL)</span>
-                <div class="value" id="total-monthly">R$ 0,00</div>
-            </div>
-            <div class="dash-card">
-                <span class="label">Projeção Anual (BRL)</span>
-                <div class="value" id="total-yearly">R$ 0,00</div>
-            </div>
+    <main id="main">
+        <p class="banner" id="backup-banner" hidden><span data-i18n="backup_nag">Os dados ficam só neste navegador — exporte um backup de vez em quando.</span> <button class="link-btn" type="button" data-action="export-json" data-i18n="export_now">exportar agora</button></p>
+
+        <section class="dashboard" aria-labelledby="h-summary">
+            <h2 class="sr-only" id="h-summary" data-i18n="summary">Resumo</h2>
+            <div class="card"><span class="label" data-i18n="monthly">Total mensal</span><span class="value" id="total-monthly">—</span></div>
+            <div class="card"><span class="label" data-i18n="yearly">Total anual</span><span class="value" id="total-yearly">—</span></div>
+            <div class="card"><span class="label" data-i18n="active">Ativas</span><span class="value" id="total-count">—</span></div>
+            <div class="card"><span class="label" data-i18n="next">Próxima renovação</span><span class="value small" id="next-renewal">—</span></div>
         </section>
 
-        <div class="rule">FULL PICTURE (CALENDAR)</div>
-        <section class="calendar">
-            <!-- Grid gerado via JS -->
-            <div class="cal-grid" id="calendar-grid"></div>
+        <div class="rule" data-i18n="upcoming_rule">PRÓXIMOS 30 DIAS</div>
+        <ul class="upcoming" id="upcoming"></ul>
+
+        <div class="rule" data-i18n="calendar_rule">CALENDÁRIO</div>
+        <section class="calendar" aria-labelledby="cal-title">
+            <div class="cal-head">
+                <button class="act-btn" type="button" data-action="cal-prev" data-i18n-attr="aria-label:prev_month" aria-label="Mês anterior">←</button>
+                <h2 class="cal-title" id="cal-title"></h2>
+                <button class="act-btn" type="button" data-action="cal-next" data-i18n-attr="aria-label:next_month" aria-label="Próximo mês">→</button>
+            </div>
+            <div class="cal-grid" id="calendar-grid" role="list" aria-labelledby="cal-title"></div>
         </section>
 
-        <div class="rule">ADD SUBSCRIPTION</div>
+        <div class="rule" data-i18n="breakdown_rule">POR CATEGORIA</div>
+        <section class="breakdown" id="breakdown" aria-live="polite"></section>
+
+        <div class="rule" id="form-rule" data-i18n="add_rule">NOVA ASSINATURA</div>
         <section class="form-section">
-            <form id="sub-form">
-                <div class="input-row">
-                    <input type="text" id="sub-name" placeholder="Nome (ex: AWS, Netflix)" required>
-                    <input type="text" id="sub-domain" placeholder="Domínio p/ Logo (ex: aws.amazon.com)">
-                </div>
-                <div class="input-row">
-                    <input type="number" id="sub-price" placeholder="Valor" step="0.01" required>
-                    <select id="sub-currency">
-                        <option value="BRL">BRL (R$)</option>
-                        <option value="USD">USD ($)</option>
-                    </select>
-                    <select id="sub-cycle">
-                        <option value="monthly">Mensal</option>
-                        <option value="yearly">Anual</option>
-                        <option value="weekly">Semanal</option>
-                    </select>
-                    <input type="number" id="sub-day" placeholder="Dia Venc. (1-31)" min="1" max="31" required>
-                </div>
-                <div class="input-row">
-                    <input type="text" id="sub-tags" placeholder="Tags (separadas por vírgula, ex: homelab, personal)">
-                    <button type="submit" class="act-btn">Adicionar</button>
+            <form id="sub-form" novalidate>
+                <input type="hidden" id="sub-id">
+                <div class="field grow"><label for="sub-name" data-i18n="f_name">Nome</label><input type="text" id="sub-name" required maxlength="80" autocomplete="off" placeholder="Netflix"></div>
+                <div class="field grow"><label for="sub-domain" data-i18n="f_domain">Site (para o ícone)</label><input type="text" id="sub-domain" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="netflix.com"></div>
+                <div class="field"><label for="sub-price" data-i18n="f_price">Valor</label><input type="number" id="sub-price" required min="0" step="0.01" inputmode="decimal"></div>
+                <div class="field"><label for="sub-currency" data-i18n="f_currency">Moeda</label><select id="sub-currency"><option value="BRL">BRL (R$)</option><option value="USD">USD ($)</option><option value="EUR">EUR (€)</option></select></div>
+                <div class="field"><label for="sub-cycle" data-i18n="f_cycle">Ciclo</label><select id="sub-cycle"><option value="monthly" data-i18n="c_monthly">mensal</option><option value="yearly" data-i18n="c_yearly">anual</option><option value="weekly" data-i18n="c_weekly">semanal</option></select></div>
+                <div class="field"><label for="sub-renews" data-i18n="f_renews">Próxima cobrança</label><input type="date" id="sub-renews" required></div>
+                <div class="field"><label for="sub-status" data-i18n="f_status">Situação</label><select id="sub-status"><option value="active" data-i18n="s_active">ativa</option><option value="paused" data-i18n="s_paused">pausada</option><option value="cancelled" data-i18n="s_cancelled">cancelada</option></select></div>
+                <div class="field grow"><label for="sub-tags" data-i18n="f_tags">Tags (separadas por vírgula)</label><input type="text" id="sub-tags" autocomplete="off" placeholder="streaming, trabalho"></div>
+                <div class="field full"><label for="sub-notes" data-i18n="f_notes">Notas</label><input type="text" id="sub-notes" maxlength="500" autocomplete="off"></div>
+                <p class="field-error full" id="form-error" role="alert" hidden></p>
+                <div class="form-actions full">
+                    <button type="button" class="act-btn" id="btn-cancel-edit" data-action="cancel-edit" data-i18n="cancel" hidden>cancelar</button>
+                    <button type="submit" class="act-btn ok" id="btn-submit" data-i18n="add">adicionar</button>
                 </div>
             </form>
         </section>
 
-        <div class="rule">ACTIVE SUBSCRIPTIONS</div>
-        <section class="actions-bar">
-            <button class="act-btn" id="btn-export-json">↓ Export JSON</button>
-            <label class="act-btn" style="cursor:pointer;">
-                ↑ Import JSON
-                <input type="file" id="btn-import-json" accept=".json" style="display:none;">
-            </label>
-            <button class="act-btn" id="btn-export-ics">📅 Export Webcal (.ics)</button>
+        <div class="rule" data-i18n="list_rule">ASSINATURAS</div>
+        <section class="list-tools">
+            <label class="sr-only" for="q" data-i18n="filter_label">Filtrar</label>
+            <input type="search" id="q" class="search" data-i18n-attr="placeholder:filter_ph" placeholder="filtrar por nome, tag, nota…" autocomplete="off">
+            <label class="sr-only" for="sort" data-i18n="sort_label">Ordenar</label>
+            <select id="sort">
+                <option value="next" data-i18n="sort_next">próxima cobrança</option>
+                <option value="cost" data-i18n="sort_cost">custo mensal</option>
+                <option value="name" data-i18n="sort_name">nome</option>
+            </select>
         </section>
-        
-        <div id="subs-list">
-            <!-- Cards injetados via JS -->
-        </div>
+        <ul class="subs" id="subs-list"></ul>
+
+        <section class="actions-bar" aria-label="Dados">
+            <button class="act-btn" type="button" data-action="export-json" data-i18n="export_json">exportar JSON</button>
+            <button class="act-btn" type="button" data-action="import-json" data-i18n="import_json">importar JSON</button>
+            <button class="act-btn" type="button" data-action="export-ics" data-i18n="export_ics">exportar calendário (.ics)</button>
+            <input type="file" id="import-file" accept="application/json,.json" hidden>
+        </section>
     </main>
-    <script src="app.js"></script>
+
+    <dialog id="dialog" aria-labelledby="dialog-title">
+        <h2 id="dialog-title"></h2>
+        <div id="dialog-body"></div>
+        <div class="dialog-actions" id="dialog-actions"></div>
+    </dialog>
+    <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 </body>
 </html>
