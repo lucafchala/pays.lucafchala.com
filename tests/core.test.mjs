@@ -120,3 +120,12 @@ test('encrypted backup: round trip, wrong passphrase, envelope detection', async
   await assert.rejects(C.decryptBackup(JSON.stringify(tampered), 'correct horse battery'), /bad-pass/);
   await assert.rejects(C.decryptBackup('{"format":"subs-backup","v":1,"kdf":{"iterations":10}}', 'x'), /bad-file/);
 });
+
+test('imported junk in name/notes is dropped, not turned into "[object Object]"', () => {
+  const s = C.normalize({ name: { a: 1 }, notes: ['x'], price: 1, renews: '2026-10-01' });
+  assert.equal(s.name, '');
+  assert.equal(s.notes, '');
+  const n = C.normalize({ name: 42, notes: 'ok', price: 1, renews: '2026-10-01' });
+  assert.equal(n.name, '42');
+  assert.equal(n.notes, 'ok');
+});

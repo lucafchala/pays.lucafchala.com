@@ -116,7 +116,7 @@
         if (cycle === 'weekly') day = parse(renews).d;
         var out = {
             id: typeof r.id === 'string' && r.id ? r.id.slice(0, 64) : uuid(),
-            name: String(r.name || '').trim().slice(0, 80),
+            name: text(r.name).trim().slice(0, 80),
             domain: cleanDomain(r.domain),
             price: isFinite(price) && price >= 0 ? Math.round(price * 100) / 100 : 0,
             currency: CURRENCIES.indexOf(r.currency) !== -1 ? r.currency : 'BRL',
@@ -125,13 +125,19 @@
             renews: renews,
             tags: cleanTags(r.tags),
             status: STATUSES.indexOf(r.status) !== -1 ? r.status : 'active',
-            notes: String(r.notes || '').slice(0, 500)
+            notes: text(r.notes).slice(0, 500)
         };
         var hist = cleanHistory(r.priceHistory);
         /* Only present when there is history, so records without it keep the
            exact v1/v2 shape the external script reads. */
         if (hist.length) out.priceHistory = hist;
         return out;
+    }
+
+    /* A hand-edited or foreign import can carry an object or array here;
+       String() would turn it into the literal "[object Object]". */
+    function text(v) {
+        return typeof v === 'string' ? v : typeof v === 'number' && isFinite(v) ? String(v) : '';
     }
 
     /* ── Price history ── */
