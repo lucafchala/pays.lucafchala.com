@@ -48,3 +48,8 @@ jobs:
 
       - name: Status-monitor marker present
         run: grep -q '<h1 class="name">subs</h1>' index.html || { echo "status.lucafchala.com looks for 'subs' on this page"; exit 1; }
+
+      # Aviso de lançamento de álbum do fotos, posto pelo servidor (functions/);
+      # os testes dele rodam no passo "Unit tests" acima.
+      - name: Album launch notice (functions syntax)
+        run: for f in functions/*.js functions/_lib/*.js; do node --check "$f" || exit 1; done

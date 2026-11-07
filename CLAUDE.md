@@ -16,3 +16,7 @@ Client-side subscription tracker. No backend; data lives in the browser's `local
 - **Every `<script>` has `data-cfasync="false"`.**
 - **Keep `<h1 class="name">subs</h1>` exactly** — status.lucafchala.com looks for `subs`.
 - **Strings** go in the `T.pt` / `T.en` objects in `app.js`. Static elements use `data-i18n` / `data-i18n-attr`.
+
+## Album launch notice
+
+- **Album launch notice: server-side only.** fotos' strip is inserted by `functions/_middleware.js` (`functions/_lib/destaque-servidor.js`, an identical copy in keys, pays and proof). Never load fotos' `/destaque.js` here or add fotos to the CSP: a third-party script would reach the subscriptions in `localStorage`. Keep `_routes.json` limited to `/`, keep fotos' answer escaped and limited to known album hosts, and change the copies together. See README → "Album launch notice".
